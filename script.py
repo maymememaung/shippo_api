@@ -63,8 +63,6 @@ if __name__ == "__main__":
                 quit = True
             case 0:
                 createShipment()
-            case 1:
-                print(possible_cmds[1])
 
         print("-----------------------------------------")
 
