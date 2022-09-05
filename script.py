@@ -17,6 +17,7 @@ possible_cmds = {
     6: "Retrieve Address by Shipment ID",
     7: "Retrieve All Shipments",
     8: "Get Last Shipment ID",
+    9: "Retrieve Last Shipment",
     -1: "Quit"
 }
 
@@ -84,7 +85,7 @@ def validateDimensions(dimensions):
 
     for d in dimensions:
         try:
-            d = int(d)
+            d = float(d)
             if d < 0:
                 return False
         except:
@@ -128,7 +129,7 @@ def createAddress(logfile):
                 country=country,  # iso2 country code
                 validate=True
             )
-            if not address_from.validation_results.is_valid:
+            if address_from.validation_results and not address_from.validation_results.is_valid:
                 raise AddressError(
                     address_from.validation_results.messages[0].text, None, address_from.validation_results.messages[0].code)
             print("Address Created. Address ID: %s" % (address_from.object_id))
@@ -170,7 +171,7 @@ def createParcel(logfile):
 
     dimensions = input(
         "\nEnter length, width, and height separated by space:").split()
-    while (not validateDimensions(dimensions)):
+    while (not validateDimensions(dimensions) or len(dimensions) < 3):
         print("\nDimension not valid. Try again.")
         dimensions = input(
             "\nEnter length, width, and height separated by space:").split()
@@ -331,7 +332,18 @@ def retrieveAllShipments():
 
 def getLastShipmentId():
     shipments = shippo.Shipment.all()
-    print(shipments.results[0].object_id)
+    if (len(shipments) > 1):
+        print(shipments.results[0].object_id)
+    else:
+        print("There are no shipments.")
+
+
+def retrieveLastShipment():
+    shipments = shippo.Shipment.all()
+    if (len(shipments) > 1):
+        displayShipments([shipments.results[0]])
+    else:
+        print("There are no shipments.")
 
 
 def printTable(headers, data):
@@ -382,9 +394,8 @@ def displayShipments(shipments):
         records.append(row)
     x = PrettyTable()
     x.field_names = shipment_fields
-    for row in records:
-        x.add_row(row)
-    x._max_width = {"address_from": 20, "address_to": 20, "parcels": 20, "object_id": 20}
+    x.add_rows(records)
+    x._max_width = {header: 20 for header in shipment_fields}
     x.hrules = ALL
     print(x)
 
@@ -425,5 +436,7 @@ if __name__ == "__main__":
                     retrieveAllShipments()
                 case 8:
                     getLastShipmentId()
+                case 9:
+                    retrieveLastShipment()
 
             print("-----------------------------------------")
