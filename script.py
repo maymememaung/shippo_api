@@ -1,6 +1,9 @@
+from shippo.error import InvalidRequestError, AddressError
 from fileinput import filename
 import shippo
 from datetime import datetime
+from prettytable import PrettyTable, ALL
+
 
 shippo.config.api_key = "shippo_test_4be2330f4cc15d6d278b60de93c2adbc7ded0d1d"
 
@@ -12,6 +15,8 @@ possible_cmds = {
     4: "Retrieve Parcel by Shipment ID",
     5: "Retrieve Address by Address ID",
     6: "Retrieve Address by Shipment ID",
+    7: "Retrieve All Shipments",
+    8: "Get Last Shipment ID",
     -1: "Quit"
 }
 
@@ -30,6 +35,15 @@ mass_units = {
     2: "lb",
     3: "kg"
 }
+
+add_fields = ["name", "street1", "city", "state", "zip", "country"]
+
+parcel_fields = ["width", "length", "height",
+                 "weight", "distance_unit", "mass_unit"]
+
+shipment_fields = ["object_id", "status", "shipment_date", "address_from", "address_to", "parcels"]
+
+rate_fields = ["provider", "servicelevel", "duration_terms", "estimated_days", "amount", "currency"]
 
 
 def printCommands():
@@ -71,11 +85,10 @@ def validateDimensions(dimensions):
     for d in dimensions:
         try:
             d = int(d)
-        except:
-            return False
-        finally:
             if d < 0:
                 return False
+        except:
+            return False
 
     return True
 
@@ -94,33 +107,53 @@ def commandInput():
 
 def createAddress(logfile):
 
-    name = input("Enter Name:")
-    country = input("Enter the two letter country code, e.g. US:")
-    street = input("Enter the street address:")
-    city = input("Enter the city:")
-    state = input("Enter the state:")
-    zip = input("Enter the zip code:")
+    success = False
 
-    address_from = shippo.Address.create(
-        name=name,
-        street1=street,
-        city=city,
-        state=state,
-        zip=zip,
-        country=country,  # iso2 country code
-    )
+    while (not success):
 
-    print("Address Created. Address ID: %s" % (address_from.object_id))
-    logfile.write("Address Created. Address ID: %s\n" % (address_from.object_id))
+        name = input("Enter Name:")
+        country = input("Enter the two letter country code, e.g. US:")
+        street = input("Enter the street address:")
+        city = input("Enter the city:")
+        state = input("Enter the state:")
+        zip = input("Enter the zip code:")
 
-    add = {
-        "name": name,
-        "street1": street,
-        "city": city,
-        "state": state,
-        "zip": zip,
-        "country": country
-    }
+        try:
+            address_from = shippo.Address.create(
+                name=name,
+                street1=street,
+                city=city,
+                state=state,
+                zip=zip,
+                country=country,  # iso2 country code
+                validate=True
+            )
+            if not address_from.validation_results.is_valid:
+                raise AddressError(
+                    address_from.validation_results.messages[0].text, None, address_from.validation_results.messages[0].code)
+            print("Address Created. Address ID: %s" % (address_from.object_id))
+            success = True
+
+        except InvalidRequestError as e:
+            print(list(e.http_body.values())[0][0], "Please try again.")
+            # print(e.args[0])
+
+        except AddressError as e:
+            print(e.args[0], "Please try again.")
+
+    logfile.write("Address Created. Address ID: %s\n" %
+                  (address_from.object_id))
+
+    # add = {
+    #     "name": address_from.name,
+    #     "street1": address_from.street1,
+    #     "city": address_from.city,
+    #     "state": address_from.state,
+    #     "zip": address_from.zip,
+    #     "country": address_from.country
+    # }
+
+    add = {field: address_from[field] for field in add_fields}
 
     return add
 
@@ -186,7 +219,7 @@ def confirmShipment(sender_add, rcpt_add, parcel):
     print("\nRecipient Name and Address: %s" % (" ".join(rcpt_add.values())))
 
     print("\nParcel Information: %s" % (" ".join(parcel.values())))
-    
+
     confirm = input("\nDo you want to continue creating this shipment? [y|n]")
 
     return confirm.lower() == "y"
@@ -219,10 +252,141 @@ def createShipment(logfile):
         )
 
         print("Shipment Created. Shipment ID: %s" % (shipment.object_id))
-        logfile.write("Shipment Created. Shipment ID: %s\n" % (shipment.object_id))
+        logfile.write("Shipment Created. Shipment ID: %s\n" %
+                      (shipment.object_id))
 
     else:
         print("Aborting Operation.")
+
+
+def retrieveShipment():
+    shipment_id = input("Enter Shipment ID:")
+
+    try:
+        shipment = shippo.Shipment.retrieve(shipment_id)
+        displayShipments([shipment])
+    except:
+        print("No shipment found.")
+
+
+def retrieveParcelByParcelId():
+    parcel_id = input("Enter Parcel ID:")
+
+    try:
+        parcel = shippo.Parcel.retrieve(parcel_id)
+        displayData(parcel_fields, [parcel])
+        # parcelToString(parcel)
+    except:
+        print("No parcel found.")
+
+
+def retrieveRatesByShipmentId():
+    shipment_id = input("Enter Shipment ID:")
+
+    try:
+        rates = shippo.Shipment.get_rates(shipment_id, asynchronous=False)
+        for rate in rates.results:
+            rate.servicelevel = rate.servicelevel.name
+        displayData(rate_fields, rates.results)
+    except:
+        print("No rates found.")
+
+
+def retrieveParcelByShipmentId():
+    shipment_id = input("Enter Shipment ID:")
+
+    try:
+        shipment = shippo.Shipment.retrieve(shipment_id)
+        displayData(parcel_fields, [shipment.parcels[0]])
+    except:
+        print("No parcel found.")
+
+
+def retrieveAddressByAddressId():
+    address_id = input("Enter Address ID:")
+    try:
+        add = shippo.Address.retrieve(address_id)
+        # displayData(add_fields, [add])
+        addressToString(add)
+    except:
+        print("Address not found.")
+
+
+def retrieveAddressbyShipmentId():
+    shipment_id = input("Enter Shipment ID:")
+
+    try:
+        shipment = shippo.Shipment.retrieve(shipment_id)
+        add = shippo.Address.retrieve(shipment.address_from.object_id)
+        displayData(add_fields, [add])
+    except:
+        print("No parcel found.")
+
+
+def retrieveAllShipments():
+    shipments = shippo.Shipment.all()
+    # print(shipments)
+    displayShipments(shipments.results)
+
+
+def getLastShipmentId():
+    shipments = shippo.Shipment.all()
+    print(shipments.results[0].object_id)
+
+
+def printTable(headers, data):
+    x = PrettyTable()
+    x.field_names = headers
+    for record in data:
+        row = []
+        for header in headers:
+            row.append(record[header])
+        x.add_row(row)
+
+    x._max_width = {header: 20 for header in headers}
+    x.hrules = ALL
+
+    print(x)
+
+
+def displayData(headers, data):
+    print_method = input(
+        "Do you want a table format or a raw format? [t|r]")
+    if (print_method.lower() == 't'):
+        printTable(headers, data)
+    else:
+        print(data)
+
+
+def parcelToString(parcel):
+    return ("length=%s,width=%s,height=%s %s,weight=%s %s" % (parcel.length, parcel.width, parcel.height, parcel.distance_unit, parcel.weight, parcel.mass_unit))
+
+
+def addressToString(address):
+    return ("%s, %s, %s %s, %s %s" % (address.name, address.street1, address.city, address.state, address.zip, address.country))
+
+
+def displayShipments(shipments):
+    records = []
+    for shipment in shipments:
+        row = []
+        for header in shipment_fields:
+            if header == "address_from" or header == "address_to":
+                row.append(addressToString(shipment[header]))
+            
+            elif header == "parcels":
+                row.append(parcelToString(shipment[header][0]))
+            
+            else:
+                row.append(shipment[header])
+        records.append(row)
+    x = PrettyTable()
+    x.field_names = shipment_fields
+    for row in records:
+        x.add_row(row)
+    x._max_width = {"address_from": 20, "address_to": 20, "parcels": 20, "object_id": 20}
+    x.hrules = ALL
+    print(x)
 
 
 if __name__ == "__main__":
@@ -234,8 +398,9 @@ if __name__ == "__main__":
     filename = datetime.now().strftime("%m-%d-%y,%H.%M.%S") + ".txt"
 
     with open("logs/" + filename, "w") as logfile:
-        
+
         while not quit:
+            # printTable()
 
             cmd_code = commandInput()
 
@@ -244,54 +409,21 @@ if __name__ == "__main__":
                     quit = True
                 case 0:
                     createShipment(logfile)
+                case 1:
+                    retrieveShipment()
+                case 2:
+                    retrieveRatesByShipmentId()
+                case 3:
+                    retrieveParcelByParcelId()
+                case 4:
+                    retrieveParcelByShipmentId()
+                case 5:
+                    retrieveAddressByAddressId()
+                case 6:
+                    retrieveAddressbyShipmentId()
+                case 7:
+                    retrieveAllShipments()
+                case 8:
+                    getLastShipmentId()
 
             print("-----------------------------------------")
-
-# address1 = shippo.Address.create(
-#     name='John Smith',
-#     street1='6512 Greene Rd.',
-#     street2='',
-#     company='Initech',
-#     phone='+1 234 346 7333',
-#     city='Woodridge',
-#     state='IL',
-#     zip='60517',
-#     country='US',
-#     metadata='Customer ID 123456'
-# )
-
-# print ('Success with Address 1 : %r' % (address1, ))
-
-# address_from = {
-#     "name": "Shawn Ippotle",
-#     "street1": "215 Clayton St.",
-#     "city": "San Francisco",
-#     "state": "CA",
-#     "zip": "94117",
-#     "country": "US"
-# }
-
-# address_to = {
-#     "name": "Mr Hippo",
-#     "street1": "Broadway 1",
-#     "city": "New York",
-#     "state": "NY",
-#     "zip": "10007",
-#     "country": "US"
-# }
-
-# parcel = {
-#     "length": "5",
-#     "width": "5",
-#     "height": "5",
-#     "distance_unit": "in",
-#     "weight": "2",
-#     "mass_unit": "lb"
-# }
-
-# shipment = shippo.Shipment.create(
-#     address_from = address_from,
-#     address_to = address_to,
-#     parcels = [parcel],
-#     asynchronous = False
-# )
