@@ -126,7 +126,7 @@ def createParcel(logfile):
         mass_unit = input("\nCode not valid. Try again.")
 
     weight = input("\nEnter your parcel weight.")
-    while (not validateDimensions(weight)):
+    while (not validateDimensions([weight])):
         weight = input("\nWeight not valid. Try again.")
 
     try:
