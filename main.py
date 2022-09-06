@@ -3,8 +3,9 @@ from shippo.error import InvalidRequestError, AddressError
 import shippo
 from datetime import datetime
 from utilities import *
+from config import API_KEY
 
-shippo.config.api_key = "shippo_test_4be2330f4cc15d6d278b60de93c2adbc7ded0d1d"
+shippo.config.api_key = API_KEY
 
 possible_cmds = {
     0: "Create Shipment",
