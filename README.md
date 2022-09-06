@@ -1,6 +1,6 @@
 # shippo_api
-This is a simple command line interface for handling shipping related tasks using shippo api (test mode.)
-Reference Docs: https://goshippo.com/docs/reference
+This is a simple command line interface for handling shipping related tasks using shippo api (test mode).
+Reference Docs: https://goshippo.com/docs/reference.
 
 Set Up
 
@@ -10,7 +10,7 @@ Set Up
 
 3. Open the terminal/command and type cd shippo_api.
 
-4. Install requirements using pip3 install -r requirements.txt.
+4. Install requirements using pip3 install -r requirements.txt, if you're using Python 3.xx.xx.
 
 5. In this directory, create config.py.
 
